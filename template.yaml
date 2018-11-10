@@ -1,0 +1,173 @@
+Parameters: 
+  Region: 
+    Type: String
+    Default: eu-west-1
+    AllowedValues: 
+      - eu-west-1
+      - eu-west-2
+      - eu-west-3
+      - eu-central-1
+      - us-west-2
+      - us-west-1
+      - us-east-2
+      - us-east-1
+      - ap-south-1
+      - ap-northeast-2
+      - ap-southeast-1
+      - ap-southeast-2
+      - ap-northeast-1
+      - ca-central-1
+      - cn-north-1
+      - sa-east-1
+    Description: Enter the AWS region to deploy stack. Default is eu-west-1
+  VPCCidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Type: String
+    Default: 10.0.0.0/16
+    Description: Enter the CIDR for your VPC
+  PublicSubnet1Cidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Type: String
+    Default: 10.0.1.0/24
+    Description: Enter the CIDR for your Public Subnet 1
+  PublicSubnet2Cidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Type: String
+    Default: 10.0.2.0/24
+    Description: Enter the CIDR for your Public Subnet 2
+  PrivateSubnet1Cidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Type: String
+    Default: 10.0.3.0/24
+    Description: Enter the CIDR for your Private Subnet 1
+  PrivateSubnet2Cidr:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Type: String
+    Default: 10.0.4.0/24
+    Description: Enter the CIDR for your Private Subnet 2
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref VPCCidr
+      Tags:
+        - Key: Name
+          Value: VPC-1 
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub ${Region}a
+      CidrBlock: !Ref PublicSubnet1Cidr
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name 
+          Value: PublicSubnet-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub ${Region}b
+      CidrBlock: !Ref PublicSubnet2Cidr
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name 
+          Value: PublicSubnet-2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub ${Region}a
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name 
+          Value: PrivateSubnet-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub ${Region}b
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name 
+          Value: PrivateSubnet-2
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags:
+        -  Key: Name 
+           Value: InternetGateway
+
+  AttachIGtoVPC:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name 
+          Value: PrivateRouteTable
+
+  AssociatePublicSubnet1ToPublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  AssociatePublicSubnet2ToPublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  AssociatePrivateSubnet1ToPrivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  AssociatePrivateSubnet2ToPrivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  PublicRouteToInternet:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  # Create EIP which will be used by the NAT Gateway
+  NATEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: !Ref VPC
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties: 
+      AllocationId: !GetAtt NATEIP.AllocationId
+      SubnetId: !Ref PrivateSubnet1
+      Tags:
+        - Key: Name 
+          Value: NatGateway
+
+
