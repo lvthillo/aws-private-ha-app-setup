@@ -155,6 +155,13 @@ Resources:
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTable
 
+  PrivateRouteToInternet:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+      RouteTableId: !Ref PrivateRouteTable
+
   # Create EIP which will be used by the NAT Gateway
   NATEIP:
     Type: AWS::EC2::EIP
@@ -165,9 +172,192 @@ Resources:
     Type: AWS::EC2::NatGateway
     Properties: 
       AllocationId: !GetAtt NATEIP.AllocationId
-      SubnetId: !Ref PrivateSubnet1
+      SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name 
           Value: NatGateway
+
+  BastionHostSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Security Group for Bastion Host to allow SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name 
+          Value: Bastion Host Security Group
+      VpcId: !Ref VPC
+
+  ALBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Security Group for Application Load Balancer to expose HTTP 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name 
+          Value: ALB Security Group
+      VpcId: !Ref VPC
+
+  EC2SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Security Group for EC2 to allow SSH from Bastion and expose HTTP 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionHostSG
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSG
+      Tags:
+        - Key: Name 
+          Value: EC2 Security Group
+      VpcId: !Ref VPC
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties: 
+      AvailabilityZone: !Sub ${Region}a
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/xvda"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "8"
+      ImageId: ami-0a5e707736615003c
+      InstanceType: t2.micro
+      KeyName: demo-key
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          SubnetId: !Ref PublicSubnet1
+          GroupSet: 
+            - !Ref BastionHostSG
+      Tags: 
+        - Key: Name 
+          Value: Bastion Host
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: app-load-balancer
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSG
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name 
+          Value: Application Load Balancer
+      Type: application
+
+  ALBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Name: AppTargets
+      Port: 10
+      Protocol: HTTPS
+      Targets:
+      - Id: !Ref EC2App1
+        Port: 80
+      - Id: !Ref EC2App2
+        Port: 80
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name 
+          Value: Application Load Balancer Target Group
+
+  EC2App1:
+    Type: AWS::EC2::Instance
+    Properties: 
+      AvailabilityZone: !Sub ${Region}a
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/xvda"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "8"
+      ImageId: ami-0a5e707736615003c
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - ""
+            -
+              - "#!/bin/bash"
+              - "\n"
+              - "sudo yum update -y"
+              - "\n"
+              - "sudo yum install -y httpd"
+              - "\n"
+              - "sudo service httpd start"
+              - "\n"
+              - "sudo chkconfig httpd on"
+              - "\n"
+      InstanceType: t2.micro
+      KeyName: demo-key
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          SubnetId: !Ref PrivateSubnet1
+          GroupSet: 
+            - !Ref EC2SG
+      Tags: 
+        - Key: Name 
+          Value: EC2 App 1
+
+  EC2App2:
+    Type: AWS::EC2::Instance
+    Properties: 
+      AvailabilityZone: !Sub ${Region}b
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/xvda"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "8"
+      ImageId: ami-0a5e707736615003c
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - ""
+            -
+              - "#!/bin/bash"
+              - "\n"
+              - "sudo yum update -y"
+              - "\n"
+              - "sudo yum install -y httpd"
+              - "\n"
+              - "sudo service httpd start"
+              - "\n"
+              - "sudo chkconfig httpd on"
+              - "\n"
+      InstanceType: t2.micro
+      KeyName: demo-key
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          SubnetId: !Ref PrivateSubnet2
+          GroupSet: 
+            - !Ref EC2SG
+      Tags: 
+        - Key: Name 
+          Value: EC2 App 2
+
 
 
