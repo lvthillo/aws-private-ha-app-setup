@@ -261,6 +261,16 @@ Resources:
           Value: Application Load Balancer
       Type: application
 
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTG
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
   ALBTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -271,8 +281,8 @@ Resources:
       Matcher:
         HttpCode: '200'
       Name: AppTargets
-      Port: 10
-      Protocol: HTTPS
+      Port: 80
+      Protocol: HTTP
       Targets:
       - Id: !Ref EC2App1
         Port: 80
@@ -296,19 +306,17 @@ Resources:
       ImageId: ami-0a5e707736615003c
       UserData:
         Fn::Base64:
-          Fn::Join:
-            - ""
-            -
-              - "#!/bin/bash"
-              - "\n"
-              - "sudo yum update -y"
-              - "\n"
-              - "sudo yum install -y httpd"
-              - "\n"
-              - "sudo service httpd start"
-              - "\n"
-              - "sudo chkconfig httpd on"
-              - "\n"
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              aws ec2 wait nat-gateway-available --nat-gateway-ids {gateway}
+              sudo yum update -y
+              sudo yum install -y httpd
+              sudo service httpd start
+              sudo chkconfig httpd on
+            - {
+              gateway: !Ref NATGateway
+              }
       InstanceType: t2.micro
       KeyName: demo-key
       NetworkInterfaces: 
@@ -334,19 +342,17 @@ Resources:
       ImageId: ami-0a5e707736615003c
       UserData:
         Fn::Base64:
-          Fn::Join:
-            - ""
-            -
-              - "#!/bin/bash"
-              - "\n"
-              - "sudo yum update -y"
-              - "\n"
-              - "sudo yum install -y httpd"
-              - "\n"
-              - "sudo service httpd start"
-              - "\n"
-              - "sudo chkconfig httpd on"
-              - "\n"
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              aws ec2 wait nat-gateway-available --nat-gateway-ids {gateway}
+              sudo yum update -y
+              sudo yum install -y httpd
+              sudo service httpd start
+              sudo chkconfig httpd on
+            - {
+              gateway: !Ref NATGateway
+              }
       InstanceType: t2.micro
       KeyName: demo-key
       NetworkInterfaces: 
