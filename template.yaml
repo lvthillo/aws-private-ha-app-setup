@@ -13,11 +13,10 @@ Parameters:
       - us-east-1
       - ap-south-1
       - ap-northeast-2
-      - ap-southeast-1
-      - ap-southeast-2
       - ap-northeast-1
+      - ap-southeast-2
+      - ap-southeast-1
       - ca-central-1
-      - cn-north-1
       - sa-east-1
     Description: Enter the AWS region to deploy stack. Default is eu-west-1
   VPCCidr:
@@ -45,6 +44,43 @@ Parameters:
     Type: String
     Default: 10.0.4.0/24
     Description: Enter the CIDR for your Private Subnet 2
+  KeyPair:
+    Type: String
+    Default: demo-key
+    Description: Enter name of pre-generated KeyPair
+
+Mappings: 
+  RegionMap: 
+    eu-west-1: 
+      HVM64: ami-047bb4163c506cd98
+    eu-west-2: 
+      HVM64: ami-f976839e
+    eu-west-3:
+      HVM64: ami-0ebc281c20e89ba4b
+    eu-central-1: 
+      HVM64: ami-0233214e13e500f77
+    us-west-2:
+      HVM64: ami-0b59bfac6be064b78
+    us-west-1:
+      HVM64: ami-0bdb828fd58c52235
+    us-east-2:
+      HVM64: ami-a0cfeed8
+    us-east-1:
+      HVM64: ami-0ff8a91507f77f867
+    ap-south-1:
+      HVM64: ami-0912f71e06545ad88
+    ap-northeast-2:
+      HVM64: ami-0a10b2721688ce9d2
+    ap-northeast-1:
+      HVM64: ami-06cd52961ce9f0d85
+    ap-southeast-2:
+      HVM64: ami-09b42976632b27e9b
+    ap-southeast-1:
+      HVM64: ami-08569b978cc4dfa10
+    ca-central-1:
+      HVM64: ami-0b18956f
+    sa-east-1:
+      HVM64: ami-07b14488da8ea02a0
 
 Resources:
   VPC:
@@ -95,72 +131,72 @@ Resources:
         - Key: Name 
           Value: PrivateSubnet-2
 
-  InternetGateway:
+  IG:
     Type: AWS::EC2::InternetGateway
     Properties: 
       Tags:
         -  Key: Name 
-           Value: InternetGateway
+           Value: IG
 
   AttachIGtoVPC:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties: 
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref IG
       VpcId: !Ref VPC
 
-  PublicRouteTable:
+  PublicRT:
     Type: AWS::EC2::RouteTable
     Properties: 
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: PublicRouteTable
+          Value: Public-RT
 
-  PrivateRouteTable:
+  PrivateRT:
     Type: AWS::EC2::RouteTable
     Properties: 
       VpcId: !Ref VPC
       Tags:
         - Key: Name 
-          Value: PrivateRouteTable
+          Value: Private-RT
 
-  AssociatePublicSubnet1ToPublicRouteTable:
+  AssociatePublicSubnet1ToPublicRT:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties: 
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRT
       SubnetId: !Ref PublicSubnet1
 
-  AssociatePublicSubnet2ToPublicRouteTable:
+  AssociatePublicSubnet2ToPublicRT:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties: 
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PublicRT
       SubnetId: !Ref PublicSubnet2
 
-  AssociatePrivateSubnet1ToPrivateRouteTable:
+  AssociatePrivateSubnet1ToPrivateRT:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties: 
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRT
       SubnetId: !Ref PrivateSubnet1
 
-  AssociatePrivateSubnet2ToPrivateRouteTable:
+  AssociatePrivateSubnet2ToPrivateRT:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties: 
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRT
       SubnetId: !Ref PrivateSubnet2
 
   PublicRouteToInternet:
     Type: AWS::EC2::Route
     Properties: 
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-      RouteTableId: !Ref PublicRouteTable
+      GatewayId: !Ref IG
+      RouteTableId: !Ref PublicRT
 
   PrivateRouteToInternet:
     Type: AWS::EC2::Route
     Properties: 
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
-      RouteTableId: !Ref PrivateRouteTable
+      NatGatewayId: !Ref NATGW
+      RouteTableId: !Ref PrivateRT
 
   # Create EIP which will be used by the NAT Gateway
   NATEIP:
@@ -168,16 +204,16 @@ Resources:
     Properties:
       Domain: !Ref VPC
 
-  NATGateway:
+  NATGW:
     Type: AWS::EC2::NatGateway
     Properties: 
       AllocationId: !GetAtt NATEIP.AllocationId
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name 
-          Value: NatGateway
+          Value: NAT-GW
 
-  BastionHostSG:
+  BastionSG:
     Type: AWS::EC2::SecurityGroup
     Properties: 
       GroupDescription: Security Group for Bastion Host to allow SSH
@@ -188,7 +224,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name 
-          Value: Bastion Host Security Group
+          Value: Bastion-SG
       VpcId: !Ref VPC
 
   ALBSG:
@@ -202,7 +238,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name 
-          Value: ALB Security Group
+          Value: ALB-SG
       VpcId: !Ref VPC
 
   EC2SG:
@@ -213,14 +249,14 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          SourceSecurityGroupId: !Ref BastionHostSG
+          SourceSecurityGroupId: !Ref BastionSG
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSG
       Tags:
         - Key: Name 
-          Value: EC2 Security Group
+          Value: EC2-SG
       VpcId: !Ref VPC
 
   BastionHost:
@@ -233,15 +269,18 @@ Resources:
             VolumeType: "gp2"
             DeleteOnTermination: "true"
             VolumeSize: "8"
-      ImageId: ami-0a5e707736615003c
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - HVM64
       InstanceType: t2.micro
-      KeyName: demo-key
+      KeyName: !Ref KeyPair
       NetworkInterfaces: 
         - AssociatePublicIpAddress: "true"
           DeviceIndex: "0"
           SubnetId: !Ref PublicSubnet1
           GroupSet: 
-            - !Ref BastionHostSG
+            - !Ref BastionSG
       Tags: 
         - Key: Name 
           Value: Bastion Host
@@ -249,16 +288,13 @@ Resources:
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: app-load-balancer
+      Name: ALB
       Scheme: internet-facing
       SecurityGroups:
         - !Ref ALBSG
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-      Tags:
-        - Key: Name 
-          Value: Application Load Balancer
       Type: application
 
   ALBListener:
@@ -291,7 +327,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name 
-          Value: Application Load Balancer Target Group
+          Value: ALB-TG
 
   EC2App1:
     Type: AWS::EC2::Instance
@@ -303,7 +339,10 @@ Resources:
             VolumeType: "gp2"
             DeleteOnTermination: "true"
             VolumeSize: "8"
-      ImageId: ami-0a5e707736615003c
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - HVM64
       UserData:
         Fn::Base64:
           Fn::Sub:
@@ -315,10 +354,10 @@ Resources:
               sudo service httpd start
               sudo chkconfig httpd on
             - {
-              gateway: !Ref NATGateway
+              gateway: !Ref NATGW
               }
       InstanceType: t2.micro
-      KeyName: demo-key
+      KeyName: !Ref KeyPair
       NetworkInterfaces: 
         - AssociatePublicIpAddress: "false"
           DeviceIndex: "0"
@@ -327,7 +366,7 @@ Resources:
             - !Ref EC2SG
       Tags: 
         - Key: Name 
-          Value: EC2 App 1
+          Value: EC2-1
 
   EC2App2:
     Type: AWS::EC2::Instance
@@ -339,7 +378,10 @@ Resources:
             VolumeType: "gp2"
             DeleteOnTermination: "true"
             VolumeSize: "8"
-      ImageId: ami-0a5e707736615003c
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - HVM64
       UserData:
         Fn::Base64:
           Fn::Sub:
@@ -351,10 +393,10 @@ Resources:
               sudo service httpd start
               sudo chkconfig httpd on
             - {
-              gateway: !Ref NATGateway
+              gateway: !Ref NATGW
               }
       InstanceType: t2.micro
-      KeyName: demo-key
+      KeyName: !Ref KeyPair
       NetworkInterfaces: 
         - AssociatePublicIpAddress: "false"
           DeviceIndex: "0"
@@ -363,7 +405,4 @@ Resources:
             - !Ref EC2SG
       Tags: 
         - Key: Name 
-          Value: EC2 App 2
-
-
-
+          Value: EC2-2
