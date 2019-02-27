@@ -395,7 +395,7 @@ Resources:
             - {
               gateway: !Ref NATGW
               }
-      InstanceType: t2.micro
+      InstanceType: t3.micro
       KeyName: !Ref KeyPair
       NetworkInterfaces: 
         - AssociatePublicIpAddress: "false"
