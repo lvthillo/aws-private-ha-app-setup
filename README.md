@@ -9,7 +9,7 @@ This template will deploy a VPC which contains two public subnets (using an Inte
 ### Create stack
 Create stack using AWS CLI:
 ```
-$ aws cloudformation create-stack --stack-name app --template-body file://template.yaml --parameters file://parameters.json 
+$ aws cloudformation create-stack --stack-name vpc-demo --template-body file://template.yaml --parameters file://parameters.json 
 ```
 
 ### Diagram
